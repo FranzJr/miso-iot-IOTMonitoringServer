@@ -10,14 +10,15 @@ from django.conf import settings
 
 client = mqtt.Client(settings.MQTT_USER_PUB)
 
-
 def analyze_data():
     # Consulta todos los datos de la última hora, los agrupa por estación y variable
     # Compara el promedio con los valores límite que están en la base de datos para esa variable.
     # Si el promedio se excede de los límites, se envia un mensaje de alerta.
 
     print("Calculando alertas...")
-
+    
+    xTemp = 30
+    
     data = Data.objects.filter(
         base_time__gte=datetime.now() - timedelta(hours=1))
     aggregation = data.annotate(check_value=Avg('avg_value')) \
@@ -50,6 +51,13 @@ def analyze_data():
 
         if alert:
             message = "ALERT {} {} {}".format(variable, min_value, max_value)
+            topic = '{}/{}/{}/{}/in'.format(country, state, city, user)
+            print(datetime.now(), "Sending alert to {} {}".format(topic, variable))
+            client.publish(topic, message)
+            alerts += 1
+
+        if item["check_value"] > xTemp:
+            message = "HIGH_TEMP {} {}".format(variable, item["check_value"])
             topic = '{}/{}/{}/{}/in'.format(country, state, city, user)
             print(datetime.now(), "Sending alert to {} {}".format(topic, variable))
             client.publish(topic, message)
@@ -105,7 +113,7 @@ def start_cron():
     Inicia el cron que se encarga de ejecutar la función analyze_data cada 5 minutos.
     '''
     print("Iniciando cron...")
-    schedule.every(5).minutes.do(analyze_data)
+    schedule.every(1).minutes.do(analyze_data)
     print("Servicio de control iniciado")
     while 1:
         schedule.run_pending()
